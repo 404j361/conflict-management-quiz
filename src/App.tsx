@@ -39,6 +39,7 @@ import {
   loadPlayers,
   registerStudent,
   restartGame,
+  applyAnswerToPlayer,
   revealQuestion,
   startCountdown,
   startQuestion,
@@ -57,6 +58,14 @@ const iconMap = {
   CloudFog,
   Scale,
   UsersRound,
+}
+
+const PLAYER_STORAGE_KEY = 'rush-player'
+const PLAYER_MONTH_STORAGE_KEY = 'rush-player-month'
+
+function rememberPlayer(player: Player) {
+  window.localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(player))
+  window.localStorage.setItem(PLAYER_MONTH_STORAGE_KEY, getCurrentMonthKey())
 }
 
 function secondsSince(iso: string | null) {
@@ -108,7 +117,13 @@ function App() {
   })
   const [players, setPlayers] = useState<Player[]>([])
   const [player, setPlayer] = useState<Player | null>(() => {
-    const saved = window.localStorage.getItem('rush-player')
+    const saved = window.localStorage.getItem(PLAYER_STORAGE_KEY)
+    const savedMonth = window.localStorage.getItem(PLAYER_MONTH_STORAGE_KEY)
+    if (savedMonth && savedMonth !== getCurrentMonthKey()) {
+      window.localStorage.removeItem(PLAYER_STORAGE_KEY)
+      window.localStorage.removeItem(PLAYER_MONTH_STORAGE_KEY)
+      return null
+    }
     return saved ? (JSON.parse(saved) as Player) : null
   })
   const [answers, setAnswers] = useState<Answer[]>([])
@@ -127,15 +142,20 @@ function App() {
       ])
       setSession(freshSession)
       setPlayers(freshPlayers)
-      const freshPlayer = player ? freshPlayers.find((item) => item.id === player.id) : null
-      if (freshPlayer) {
-        setPlayer(freshPlayer)
-        window.localStorage.setItem('rush-player', JSON.stringify(freshPlayer))
-      }
+      setPlayer((current) => {
+        if (!current) return current
+        const freshPlayer = freshPlayers.find((item) => item.id === current.id)
+        if (!freshPlayer) return current
+        if (freshPlayer.total_answered < current.total_answered) {
+          return current
+        }
+        rememberPlayer(freshPlayer)
+        return freshPlayer
+      })
     } catch (error) {
       setDbNotice(getErrorMessage(error, 'Supabase setup needed. Running local demo mode.'))
     }
-  }, [player])
+  }, [])
 
   useEffect(() => {
     void refresh()
@@ -205,8 +225,8 @@ function App() {
       : TOTAL_TIME
   const progress = ((TOTAL_TIME - remainingTime) / TOTAL_TIME) * 100
   const visiblePlayers = useMemo(() => {
-    if (!player || players.some((item) => item.id === player.id)) return players
-    return [...players, player]
+    if (!player) return players
+    return [player, ...players.filter((item) => item.id !== player.id)]
   }, [player, players])
   const rankedPlayers = useMemo(() => rankPlayers(visiblePlayers), [visiblePlayers])
   const playerRank = player ? rankedPlayers.findIndex((item) => item.id === player.id) + 1 : 0
@@ -216,7 +236,7 @@ function App() {
   async function enterLobby(joined: Player) {
     setProfileOpen(false)
     setPlayer(joined)
-    window.localStorage.setItem('rush-player', JSON.stringify(joined))
+    rememberPlayer(joined)
     setScreen('game')
     setDbNotice('')
     await refresh()
@@ -238,7 +258,7 @@ function App() {
     if (!player) return
     const updated = await updateProfile(player, displayName, password)
     setPlayer(updated)
-    window.localStorage.setItem('rush-player', JSON.stringify(updated))
+    rememberPlayer(updated)
     setDbNotice('Profile updated.')
     setProfileOpen(false)
     setScreen('game')
@@ -246,7 +266,8 @@ function App() {
   }
 
   function handleLogout() {
-    window.localStorage.removeItem('rush-player')
+    window.localStorage.removeItem(PLAYER_STORAGE_KEY)
+    window.localStorage.removeItem(PLAYER_MONTH_STORAGE_KEY)
     setPlayer(null)
     setAnswers([])
     setFeedback(null)
@@ -295,17 +316,13 @@ function App() {
     setFeedback(answer)
     setAnswers((existing) => [...existing.filter((item) => item.question_id !== answer.question_id), answer])
     if (recordThisRun) {
-      setPlayer((existing) =>
-        existing
-          ? {
-              ...existing,
-              score: existing.score + answer.points,
-              correct_count: existing.correct_count + (answer.is_correct ? 1 : 0),
-              total_answered: existing.total_answered + 1,
-              total_response_ms: existing.total_response_ms + answer.response_ms,
-              favorite_style: selectedStyle,
-            }
-          : existing,
+      const updatedPlayer = applyAnswerToPlayer(player, answer, selectedStyle)
+      setPlayer(updatedPlayer)
+      rememberPlayer(updatedPlayer)
+      setPlayers((existing) =>
+        existing.some((item) => item.id === updatedPlayer.id)
+          ? existing.map((item) => (item.id === updatedPlayer.id ? updatedPlayer : item))
+          : [...existing, updatedPlayer],
       )
     }
     window.setTimeout(() => {
