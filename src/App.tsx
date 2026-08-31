@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CloudFog,
   HeartHandshake,
+  Info,
   IdCard,
   LockKeyhole,
   LogOut,
@@ -1047,13 +1048,24 @@ function Leaderboard({
   compact?: boolean
   monthKey?: string
 }) {
+  const [showScoring, setShowScoring] = useState(false)
   const visiblePlayers = compact
     ? players.filter((leader) => leader.total_answered > 0)
     : players
 
   return (
     <div className={clsx('leaderboard', compact && 'compact')}>
-      <h2><Trophy size={24} /> {monthKey ? `${monthKey} LEADERBOARD` : 'TOP CONFLICT MANAGERS'}</h2>
+      <div className="leaderboard-title">
+        <h2><Trophy size={24} /> {monthKey ? `${monthKey} LEADERBOARD` : 'TOP CONFLICT MANAGERS'}</h2>
+        <button
+          aria-label="Show scoring system"
+          className="info-button"
+          type="button"
+          onClick={() => setShowScoring(true)}
+        >
+          <Info size={18} />
+        </button>
+      </div>
       {visiblePlayers.slice(0, compact ? 5 : 8).map((leader, index) => (
         <motion.div className={clsx('leader-row', leader.id === playerId && 'you')} key={leader.id} layout>
           <span>{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}</span>
@@ -1063,6 +1075,40 @@ function Leaderboard({
       ))}
       {visiblePlayers.length === 0 && <p className="attempt-note">No first scores yet.</p>}
       {playerRank ? <p className="own-rank">YOU — #{playerRank} — {players.find((item) => item.id === playerId)?.score ?? 0} XP</p> : null}
+      <AnimatePresence>
+        {showScoring && (
+          <motion.div
+            aria-modal="true"
+            className="modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="dialog"
+            onClick={() => setShowScoring(false)}
+          >
+            <motion.div
+              className="scoring-dialog panel"
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <p className="eyebrow">Scoring System</p>
+              <h2>Leaderboard Rules</h2>
+              <ol>
+                <li>Higher XP ranks first.</li>
+                <li>If XP is tied, more correct answers ranks first.</li>
+                <li>If still tied, faster total response time ranks first.</li>
+                <li>If still tied, the earlier join time ranks first.</li>
+              </ol>
+              <p>Only the first completed run in the month is recorded on the leaderboard.</p>
+              <button className="primary-button" type="button" onClick={() => setShowScoring(false)}>
+                GOT IT <ArrowRight size={20} />
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
