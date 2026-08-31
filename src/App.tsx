@@ -6,12 +6,15 @@ import {
   HeartHandshake,
   IdCard,
   LockKeyhole,
+  LogOut,
   Monitor,
   RotateCcw,
   Scale,
+  Settings,
   ShieldCheck,
   Sparkles,
   Trophy,
+  UserCircle,
   UserRoundPlus,
   UsersRound,
   Volume2,
@@ -30,6 +33,7 @@ import {
 import {
   ensureSession,
   finishGame,
+  getCurrentMonthKey,
   isSupabaseConfigured,
   joinGame,
   loadPlayers,
@@ -41,6 +45,7 @@ import {
   submitAnswer,
   supabase,
   updateGameSession,
+  updateProfile,
   type Answer,
   type GameSession,
   type Player,
@@ -89,7 +94,7 @@ function App() {
   const tick = useTicker()
   const params = new URLSearchParams(window.location.search)
   const isAdmin = params.get('admin') === '1' || params.get('mode') === 'admin'
-  const [screen, setScreen] = useState<'landing' | 'login' | 'register' | 'game'>(
+  const [screen, setScreen] = useState<'landing' | 'login' | 'register' | 'settings' | 'game'>(
     isAdmin ? 'login' : 'landing',
   )
   const [session, setSession] = useState<GameSession | null>(null)
@@ -112,6 +117,7 @@ function App() {
   const [recordThisRun, setRecordThisRun] = useState(false)
   const [muted, setMuted] = useState(true)
   const [dbNotice, setDbNotice] = useState('')
+  const [profileOpen, setProfileOpen] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -121,6 +127,11 @@ function App() {
       ])
       setSession(freshSession)
       setPlayers(freshPlayers)
+      const freshPlayer = player ? freshPlayers.find((item) => item.id === player.id) : null
+      if (freshPlayer) {
+        setPlayer(freshPlayer)
+        window.localStorage.setItem('rush-player', JSON.stringify(freshPlayer))
+      }
     } catch (error) {
       setDbNotice(getErrorMessage(error, 'Supabase setup needed. Running local demo mode.'))
     }
@@ -200,8 +211,10 @@ function App() {
   const rankedPlayers = useMemo(() => rankPlayers(visiblePlayers), [visiblePlayers])
   const playerRank = player ? rankedPlayers.findIndex((item) => item.id === player.id) + 1 : 0
   const ownAnswers = player ? answers.filter((answer) => answer.player_id === player.id) : answers
+  const hasCompletedMonth = (player?.total_answered ?? 0) >= questions.length
 
   async function enterLobby(joined: Player) {
+    setProfileOpen(false)
     setPlayer(joined)
     window.localStorage.setItem('rush-player', JSON.stringify(joined))
     setScreen('game')
@@ -221,7 +234,29 @@ function App() {
     await enterLobby(await registerStudent(studentId, displayName, password))
   }
 
+  async function handleProfileUpdate(displayName: string, password: string) {
+    if (!player) return
+    const updated = await updateProfile(player, displayName, password)
+    setPlayer(updated)
+    window.localStorage.setItem('rush-player', JSON.stringify(updated))
+    setDbNotice('Profile updated.')
+    setProfileOpen(false)
+    setScreen('game')
+    await refresh()
+  }
+
+  function handleLogout() {
+    window.localStorage.removeItem('rush-player')
+    setPlayer(null)
+    setAnswers([])
+    setFeedback(null)
+    setProfileOpen(false)
+    setScreen(isAdmin ? 'login' : 'landing')
+  }
+
   function startPersonalRun() {
+    if (hasCompletedMonth) return
+    setProfileOpen(false)
     setFeedback(null)
     setAnswers([])
     setRecordThisRun((player?.total_answered ?? 0) === 0)
@@ -325,7 +360,10 @@ function App() {
         <button
           className="brand-chip"
           type="button"
-          onClick={() => setScreen(isAdmin ? 'login' : 'landing')}
+          onClick={() => {
+            setProfileOpen(false)
+            setScreen(isAdmin ? 'login' : 'landing')
+          }}
         >
           <Sparkles size={18} />
           Conflict Style Rush
@@ -347,6 +385,36 @@ function App() {
           <span className={clsx('db-chip', isSupabaseConfigured && 'online')}>
             {isSupabaseConfigured ? 'Supabase live' : 'Demo mode'}
           </span>
+          {player && (
+            <div className="profile-menu">
+              <button
+                className="profile-chip"
+                type="button"
+                onClick={() => setProfileOpen((value) => !value)}
+              >
+                <UserCircle size={19} />
+                <span>{player.display_name}</span>
+              </button>
+              {profileOpen && (
+                <div className="profile-dropdown">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false)
+                      setScreen('settings')
+                    }}
+                  >
+                    <Settings size={17} />
+                    Settings
+                  </button>
+                  <button type="button" onClick={handleLogout}>
+                    <LogOut size={17} />
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <button className="icon-button" type="button" onClick={() => setMuted((value) => !value)}>
             {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           </button>
@@ -379,6 +447,17 @@ function App() {
             onShowLogin={() => setScreen('login')}
           />
         )}
+        {screen === 'settings' && player && (
+          <SettingsPage
+            key="settings"
+            player={player}
+            onSave={handleProfileUpdate}
+            onCancel={() => {
+              setProfileOpen(false)
+              setScreen('game')
+            }}
+          />
+        )}
         {screen === 'game' && activeSession && (
           <GameSurface
             key="game"
@@ -393,6 +472,7 @@ function App() {
             feedback={feedback}
             isRecordedRun={recordThisRun}
             playerRank={playerRank}
+            monthKey={getCurrentMonthKey()}
             onAnswer={(style) => void handleAnswer(style)}
             onPlayerStart={startPersonalRun}
             onStart={async () => setSession(await startCountdown(player?.id))}
@@ -605,6 +685,80 @@ function Register({
   )
 }
 
+function SettingsPage({
+  player,
+  onSave,
+  onCancel,
+}: {
+  player: Player
+  onSave: (displayName: string, password: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [displayName, setDisplayName] = useState(player.display_name)
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      if (password && password.length < 6) {
+        throw new Error('New password must be at least 6 characters.')
+      }
+      await onSave(displayName, password)
+    } catch (err) {
+      setError(getErrorMessage(err, 'Could not update profile.'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <motion.section className="auth-panel panel" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+      <div>
+        <p className="eyebrow">Account Settings</p>
+        <h1>PROFILE</h1>
+        <p>Update your display name or set a new password.</p>
+      </div>
+      <form onSubmit={submit}>
+        <label>
+          <span>Name</span>
+          <div className="input-wrap">
+            <UserRoundPlus size={19} />
+            <input
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              placeholder="Enter your name"
+              required
+            />
+          </div>
+        </label>
+        <label>
+          <span>New Password</span>
+          <div className="input-wrap">
+            <LockKeyhole size={19} />
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Leave blank to keep current password"
+              type="password"
+            />
+          </div>
+        </label>
+        {error && <p className="form-error">{error}</p>}
+        <button className="primary-button" disabled={loading} type="submit">
+          {loading ? 'SAVING...' : 'SAVE PROFILE'} <ArrowRight size={20} />
+        </button>
+      </form>
+      <button className="text-button" type="button" onClick={onCancel}>
+        Back to game
+      </button>
+    </motion.section>
+  )
+}
+
 type GameSurfaceProps = {
   isAdmin: boolean
   session: GameSession
@@ -617,6 +771,7 @@ type GameSurfaceProps = {
   feedback: Answer | null
   isRecordedRun: boolean
   playerRank: number
+  monthKey: string
   onAnswer: (style: ConflictStyle) => void
   onPlayerStart: () => void
   onStart: () => void
@@ -640,36 +795,38 @@ function GameSurface(props: GameSurfaceProps) {
   return <QuestionScreen {...props} />
 }
 
-function Lobby({ player, players, session, onPlayerStart }: GameSurfaceProps) {
+function Lobby({ player, players, session, onPlayerStart, playerRank, monthKey }: GameSurfaceProps) {
+  const hasCompletedMonth = (player?.total_answered ?? 0) >= questions.length
+
   return (
     <motion.section className="lobby layout-two" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="panel lobby-main">
         <p className="eyebrow">Welcome, {player?.display_name}</p>
         <h1>GAME LOBBY</h1>
-        <h2>{session.status === 'PAUSED' ? 'GAME PAUSED' : 'READY WHEN YOU ARE'}</h2>
-        <button className="primary-button huge lobby-start" type="button" onClick={onPlayerStart}>
-          START GAME <ArrowRight size={22} />
+        <h2>{session.status === 'PAUSED' ? 'GAME PAUSED' : hasCompletedMonth ? 'MONTHLY RUN COMPLETE' : 'READY WHEN YOU ARE'}</h2>
+        <button
+          className="primary-button huge lobby-start"
+          disabled={hasCompletedMonth}
+          type="button"
+          onClick={onPlayerStart}
+        >
+          {hasCompletedMonth ? 'COME BACK NEXT MONTH' : 'START GAME'} <ArrowRight size={22} />
         </button>
-        {player?.total_answered ? (
-          <p className="attempt-note">Retries are for practice. The leaderboard keeps your first try.</p>
+        {hasCompletedMonth ? (
+          <p className="attempt-note">
+            Your {monthKey} score is locked on the leaderboard. A new run opens next month.
+          </p>
+        ) : player?.total_answered ? (
+          <p className="attempt-note">You have a partial monthly run. Only unanswered conflicts can still improve this month.</p>
         ) : (
-          <p className="attempt-note">Your first completed run will count for the leaderboard.</p>
+          <p className="attempt-note">Your first completed run this month will count for the leaderboard.</p>
         )}
         <div className="ready-meter">
           <strong>{players.length} / 30</strong>
           <span>Players Ready</span>
         </div>
       </div>
-      <div className="panel player-list">
-        <h3>Players Ready</h3>
-        {players.slice(0, 12).map((readyPlayer) => (
-          <div className="player-row" key={readyPlayer.id}>
-            <span className="ready-dot" />
-            <strong>{readyPlayer.display_name}</strong>
-            <span>{readyPlayer.student_id_mask}</span>
-          </div>
-        ))}
-      </div>
+      <Leaderboard players={players} playerId={player?.id} playerRank={playerRank} monthKey={monthKey} />
     </motion.section>
   )
 }
@@ -751,7 +908,7 @@ function Feedback({ answer, question }: { answer: Answer; question: (typeof ques
   )
 }
 
-function FinalResults({ answers, players, playerRank, onRestart, isRecordedRun, player }: GameSurfaceProps) {
+function FinalResults({ answers, players, playerRank, onRestart, isRecordedRun, player, monthKey }: GameSurfaceProps) {
   const score = answers.reduce((total, answer) => total + answer.points, 0)
   const correct = answers.filter((answer) => answer.is_correct).length
   const answered = Math.max(answers.length, 1)
@@ -766,8 +923,8 @@ function FinalResults({ answers, players, playerRank, onRestart, isRecordedRun, 
         <h1>{score} XP</h1>
         <p className="attempt-note">
           {isRecordedRun
-            ? 'This first try is recorded on the leaderboard.'
-            : 'Practice retry complete. Your first leaderboard score is unchanged.'}
+            ? `This ${monthKey} score is recorded on the leaderboard.`
+            : `This run is practice only. Your ${monthKey} leaderboard score is unchanged.`}
         </p>
         <div className="stat-grid">
           <Stat label="Accuracy" value={`${Math.round((correct / answered) * 100)}%`} />
@@ -779,11 +936,15 @@ function FinalResults({ answers, players, playerRank, onRestart, isRecordedRun, 
           <h3>{dominant}</h3>
           <p>{styleMeta[dominant].description}</p>
         </div>
-        <button className="primary-button retry-button" type="button" onClick={onRestart}>
-          RETRY GAME <RotateCcw size={20} />
-        </button>
+        {isRecordedRun ? (
+          <p className="attempt-note">Your next scored run opens next month.</p>
+        ) : (
+          <button className="primary-button retry-button" type="button" onClick={onRestart}>
+            RETRY GAME <RotateCcw size={20} />
+          </button>
+        )}
       </div>
-      <Leaderboard players={players} playerId={player?.id} playerRank={playerRank} />
+      <Leaderboard players={players} playerId={player?.id} playerRank={playerRank} monthKey={monthKey} />
     </section>
   )
 }
@@ -797,11 +958,7 @@ function AdminDisplay(props: GameSurfaceProps) {
           <span><Monitor size={18} /> Game Master Display</span>
           <strong>{players.length} live players</strong>
         </div>
-        <div className="admin-center">
-          <Trophy size={72} />
-          <h1>LIVE LEADERBOARD</h1>
-          <p>Students can start and retry from their own devices.</p>
-        </div>
+        <ProjectorLeaderboard players={players} />
       </div>
       <aside className="panel admin-controls">
         <h2>Admin Room</h2>
@@ -812,17 +969,82 @@ function AdminDisplay(props: GameSurfaceProps) {
   )
 }
 
-function Leaderboard({ players, playerId, playerRank, compact = false }: { players: Player[]; playerId?: string; playerRank?: number; compact?: boolean }) {
+function ProjectorLeaderboard({ players }: { players: Player[] }) {
+  const scoringPlayers = players.filter((leader) => leader.total_answered > 0)
+  const podium = scoringPlayers.slice(0, 3)
+  const runners = scoringPlayers.slice(3, 10)
+
+  return (
+    <div className="projector-board">
+      <div className="projector-title">
+        <Trophy size={54} />
+        <div>
+          <p className="eyebrow">{getCurrentMonthKey()} Monthly Scores</p>
+          <h1>TOP CONFLICT MANAGERS</h1>
+        </div>
+      </div>
+
+      {scoringPlayers.length === 0 ? (
+        <div className="empty-leaderboard">
+          <Trophy size={72} />
+          <h2>Waiting For First Scores</h2>
+          <p>Students can start from their own devices. Their monthly score will appear here.</p>
+        </div>
+      ) : (
+        <>
+          <div className="podium-grid">
+            {podium.map((leader, index) => (
+              <motion.div className={clsx('podium-card', `rank-${index + 1}`)} key={leader.id} layout>
+                <span>{index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}</span>
+                <strong>{leader.display_name}</strong>
+                <b>{leader.score} XP</b>
+                <small>{leader.correct_count} / 8 correct</small>
+              </motion.div>
+            ))}
+          </div>
+          <div className="projector-runners">
+            {runners.map((leader, index) => (
+              <motion.div className="runner-row" key={leader.id} layout>
+                <span>#{index + 4}</span>
+                <strong>{leader.display_name}</strong>
+                <b>{leader.score} XP</b>
+              </motion.div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Leaderboard({
+  players,
+  playerId,
+  playerRank,
+  compact = false,
+  monthKey,
+}: {
+  players: Player[]
+  playerId?: string
+  playerRank?: number
+  compact?: boolean
+  monthKey?: string
+}) {
+  const visiblePlayers = compact
+    ? players.filter((leader) => leader.total_answered > 0)
+    : players
+
   return (
     <div className={clsx('leaderboard', compact && 'compact')}>
-      <h2><Trophy size={24} /> TOP CONFLICT MANAGERS</h2>
-      {players.slice(0, compact ? 5 : 8).map((leader, index) => (
+      <h2><Trophy size={24} /> {monthKey ? `${monthKey} LEADERBOARD` : 'TOP CONFLICT MANAGERS'}</h2>
+      {visiblePlayers.slice(0, compact ? 5 : 8).map((leader, index) => (
         <motion.div className={clsx('leader-row', leader.id === playerId && 'you')} key={leader.id} layout>
           <span>{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}</span>
           <strong>{leader.id === playerId ? 'YOU' : leader.display_name}</strong>
           <b>{leader.score} XP</b>
         </motion.div>
       ))}
+      {visiblePlayers.length === 0 && <p className="attempt-note">No first scores yet.</p>}
       {playerRank ? <p className="own-rank">YOU — #{playerRank} — {players.find((item) => item.id === playerId)?.score ?? 0} XP</p> : null}
     </div>
   )

@@ -63,7 +63,8 @@ values (
 - Returning student login with Student ID and password.
 - Lobby with masked player identifiers and a student-controlled start button.
 - 8 rapid-fire scenarios, 50 seconds each.
-- Students can retry after finishing.
-- Database RPC records only each player's first submitted answer per question, so retries do not change the leaderboard.
+- Students can complete one scored run per calendar month.
+- Monthly leaderboards use only answers from the current month.
+- A new scored run opens automatically when the next month begins.
 - Final stats and leaderboard.
 - Admin dashboard is protected by the `admin` role and can monitor/reset classroom data.

@@ -81,6 +81,8 @@
 .brand-chip,
 .db-chip,
 .portal-button,
+.profile-chip,
+.profile-dropdown,
 .icon-button,
 .panel,
 .notice {
@@ -92,6 +94,7 @@
 
 .brand-chip,
 .portal-button,
+.profile-chip,
 .icon-button {
   color: #dff7ff;
 }
@@ -119,7 +122,61 @@
 }
 
 .topbar-actions {
+  position: relative;
   gap: 10px;
+}
+
+.profile-menu {
+  position: relative;
+}
+
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 190px;
+  min-height: 38px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.profile-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 180px;
+  overflow: hidden;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.profile-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #dff7ff;
+  background: transparent;
+  font-weight: 850;
+  text-align: left;
+}
+
+.profile-dropdown button:hover {
+  background: rgba(117, 232, 255, 0.12);
 }
 
 .db-chip {
@@ -789,6 +846,118 @@ input::placeholder {
   min-height: calc(100svh - 132px);
 }
 
+.projector-board {
+  display: grid;
+  gap: 26px;
+}
+
+.projector-title {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.projector-title svg {
+  color: #f7d046;
+  filter: drop-shadow(0 0 18px rgba(247, 208, 70, 0.35));
+}
+
+.projector-title h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 4.4rem);
+  font-weight: 950;
+}
+
+.empty-leaderboard {
+  display: grid;
+  place-items: center;
+  min-height: 440px;
+  text-align: center;
+}
+
+.empty-leaderboard svg {
+  color: #75e8ff;
+  margin-bottom: 18px;
+}
+
+.empty-leaderboard h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.6rem, 3vw, 3rem);
+}
+
+.empty-leaderboard p {
+  max-width: 560px;
+  color: #9fb7cc;
+}
+
+.podium-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.podium-card {
+  display: grid;
+  min-height: 190px;
+  align-content: center;
+  gap: 10px;
+  border: 1px solid rgba(117, 232, 255, 0.24);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(4, 18, 42, 0.72);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 24px 80px rgba(0, 0, 0, 0.25);
+}
+
+.podium-card.rank-1 {
+  min-height: 250px;
+  border-color: rgba(247, 208, 70, 0.48);
+  background: linear-gradient(180deg, rgba(247, 208, 70, 0.18), rgba(4, 18, 42, 0.76));
+}
+
+.podium-card span {
+  font-size: 2.4rem;
+}
+
+.podium-card strong {
+  color: #f5fbff;
+  font-size: clamp(1.2rem, 2vw, 2rem);
+}
+
+.podium-card b {
+  color: #75e8ff;
+  font-size: clamp(1.5rem, 2.5vw, 2.8rem);
+}
+
+.podium-card small {
+  color: #9fb7cc;
+  font-weight: 800;
+}
+
+.projector-runners {
+  display: grid;
+  gap: 10px;
+}
+
+.runner-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 58px;
+  border: 1px solid rgba(117, 232, 255, 0.12);
+  border-radius: 8px;
+  padding: 0 18px;
+  background: rgba(0, 14, 32, 0.5);
+}
+
+.runner-row span,
+.runner-row b {
+  color: #75e8ff;
+  font-weight: 950;
+}
+
 .admin-scenario {
   margin-top: 20px;
   background: rgba(4, 16, 36, 0.58);
@@ -932,6 +1101,16 @@ input::placeholder {
     justify-content: center;
     padding: 0;
     font-size: 0;
+  }
+
+  .profile-chip {
+    width: 38px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .profile-chip span {
+    display: none;
   }
 
   .panel {

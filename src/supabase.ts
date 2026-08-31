@@ -35,6 +35,7 @@ export type Player = {
 export type Answer = {
   id: string
   player_id: string
+  month_key?: string
   question_id: number
   selected_style: ConflictStyle
   is_correct: boolean
@@ -51,6 +52,11 @@ export const supabase =
 export const isSupabaseConfigured = Boolean(supabase)
 
 const nowIso = () => new Date().toISOString()
+
+export function getCurrentMonthKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
 
 function maskStudentId(studentId: string) {
   const cleaned = studentId.replace(/\s/g, '')
@@ -133,11 +139,13 @@ export async function registerStudent(
     }
   }
 
-  const { data, error } = await supabase.rpc('register_rush_student', {
-    student_id_input: studentId,
-    display_name_input: displayName,
-    password_input: password,
-  })
+  const { data, error } = await supabase
+    .rpc('register_rush_student', {
+      student_id_input: studentId,
+      display_name_input: displayName,
+      password_input: password,
+    })
+    .single()
 
   if (error) throw error
   return data as Player
@@ -158,9 +166,33 @@ export async function joinGame(studentId: string, password: string): Promise<Pla
     }
   }
 
-  const { data, error } = await supabase.rpc('join_rush_game', {
-    student_id_input: studentId,
-    password_input: password,
+  const { data, error } = await supabase
+    .rpc('join_rush_game', {
+      student_id_input: studentId,
+      password_input: password,
+    })
+    .single()
+
+  if (error) throw error
+  return data as Player
+}
+
+export async function updateProfile(
+  player: Player,
+  displayName: string,
+  password: string,
+): Promise<Player> {
+  if (!supabase) {
+    return {
+      ...player,
+      display_name: displayName.trim() || player.display_name,
+    }
+  }
+
+  const { data, error } = await supabase.rpc('update_rush_profile', {
+    player_id_input: player.id,
+    display_name_input: displayName,
+    password_input: password || null,
   })
 
   if (error) throw error
@@ -169,12 +201,9 @@ export async function joinGame(studentId: string, password: string): Promise<Pla
 
 export async function loadPlayers(): Promise<Player[]> {
   if (!supabase) return demoPlayers
-  const { data, error } = await supabase
-    .from('rush_players')
-    .select('*')
-    .eq('role', 'student')
-    .order('score', { ascending: false })
-    .limit(50)
+  const { data, error } = await supabase.rpc('get_monthly_rush_leaderboard', {
+    month_key_input: getCurrentMonthKey(),
+  })
 
   if (error) throw error
   return data as Player[]
@@ -186,6 +215,7 @@ export async function loadAnswers(playerId?: string): Promise<Answer[]> {
     .from('rush_answers')
     .select('*')
     .eq('player_id', playerId)
+    .eq('month_key', getCurrentMonthKey())
     .order('question_id')
 
   if (error) throw error
@@ -286,6 +316,7 @@ export async function submitAnswer(
 
   const { data, error } = await supabase.rpc('submit_rush_answer', {
     player_id_input: player.id,
+    month_key_input: getCurrentMonthKey(),
     question_id_input: question.id,
     selected_style_input: selectedStyle,
     response_ms_input: responseMs,
