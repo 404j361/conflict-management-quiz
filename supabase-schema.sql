@@ -190,7 +190,7 @@ as $$
   left join public.rush_answers answers
     on answers.player_id = players.id
    and answers.month_key = month_key_input
-  where players.role = 'student'
+  where players.role in ('student', 'admin')
   group by players.id
   order by score desc, correct_count desc, total_response_ms asc, players.joined_at asc;
 $$;
