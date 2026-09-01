@@ -55,8 +55,10 @@
 }
 
 .topbar,
+.topbar-identity,
 .topbar-actions,
 .brand-chip,
+.university-logo,
 .db-chip,
 .icon-button,
 .primary-button,
@@ -76,6 +78,25 @@
   gap: 12px;
   margin: 0 auto 32px;
   max-width: 1220px;
+}
+
+.topbar-identity {
+  min-width: 0;
+  gap: 12px;
+}
+
+.university-logo {
+  height: 44px;
+  max-width: min(38vw, 260px);
+  border-radius: 7px;
+  padding: 7px 12px;
+}
+
+.university-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .brand-chip,
@@ -1114,7 +1135,14 @@ input::placeholder {
 
 @media (max-width: 960px) {
   .topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
     margin-bottom: 22px;
+  }
+
+  .topbar-identity {
+    flex: 1 1 100%;
+    justify-content: space-between;
   }
 
   .hero-band,
@@ -1162,6 +1190,12 @@ input::placeholder {
   .brand-chip {
     max-width: 188px;
     font-size: 0.82rem;
+  }
+
+  .university-logo {
+    height: 42px;
+    max-width: calc(100vw - 230px);
+    padding: 7px 10px;
   }
 
   .db-chip {

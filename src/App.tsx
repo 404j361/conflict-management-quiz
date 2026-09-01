@@ -375,17 +375,28 @@ function App() {
       <div className="noise" />
 
       <header className="topbar">
-        <button
-          className="brand-chip"
-          type="button"
-          onClick={() => {
-            setProfileOpen(false)
-            setScreen(isAdmin ? 'login' : 'landing')
-          }}
-        >
-          <Sparkles size={18} />
-          Conflict Style Rush
-        </button>
+        <div className="topbar-identity">
+          <a
+            aria-label="Kamphaeng Phet Rajabhat University"
+            className="university-logo"
+            href="https://www.kpru.ac.th/"
+            rel="noreferrer"
+            target="_blank"
+          >
+            <img alt="Kamphaeng Phet Rajabhat University" src="/kpru-logo.svg" />
+          </a>
+          <button
+            className="brand-chip"
+            type="button"
+            onClick={() => {
+              setProfileOpen(false)
+              setScreen(isAdmin ? 'login' : 'landing')
+            }}
+          >
+            <Sparkles size={18} />
+            Conflict Style Rush
+          </button>
+        </div>
         <div className="topbar-actions">
           {!isAdmin && player?.role === 'admin' && (
             <button
